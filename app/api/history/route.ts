@@ -67,13 +67,9 @@ export async function GET(request: Request) {
         totalPages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("GET history error:", error);
-    return NextResponse.json({ 
-      error: "Internal Server Error", 
-      message: error.message, 
-      stack: error.stack 
-    }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 

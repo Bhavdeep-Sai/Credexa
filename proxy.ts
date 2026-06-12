@@ -71,14 +71,17 @@ export async function proxy(request: NextRequest) {
 
   // Get token from cookies
   const token = request.cookies.get("token")?.value;
+  console.log(`[Middleware Proxy] Path: ${path}, Token Present: ${!!token}, Secret Length: ${JWT_SECRET.length}`);
 
   let decodedToken = null;
   if (token) {
     decodedToken = await verifyJwtEdge(token, JWT_SECRET);
+    console.log(`[Middleware Proxy] Verification Result: ${decodedToken ? "SUCCESS" : "FAILED"}`);
   }
 
   // Redirect unauthenticated users to login
   if (isProtectedRoute && !decodedToken) {
+    console.log(`[Middleware Proxy] Redirecting from protected path ${path} to /login`);
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", path);
     return NextResponse.redirect(loginUrl);

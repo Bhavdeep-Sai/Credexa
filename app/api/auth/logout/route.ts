@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import dbConnect from "@/lib/db";
 import SystemLog from "@/models/SystemLog";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
+    await dbConnect();
     const cookieStore = await cookies();
     const token = cookieStore.get("token")?.value;
     

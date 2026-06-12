@@ -77,6 +77,10 @@ export async function PUT(request: Request) {
         return NextResponse.json({ error: "Current password is required to set a new password" }, { status: 400 });
       }
 
+      if (!user.password) {
+        return NextResponse.json({ error: "Incorrect current password" }, { status: 400 });
+      }
+
       const isMatch = await comparePassword(currentPassword, user.password);
       if (!isMatch) {
         return NextResponse.json({ error: "Incorrect current password" }, { status: 400 });

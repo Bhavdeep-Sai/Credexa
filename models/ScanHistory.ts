@@ -1,7 +1,9 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 import { IScanHistory } from "@/types";
 
-export interface IScanHistoryDocument extends Omit<IScanHistory, "_id" | "createdAt">, Document {
+export interface IScanHistoryDocument extends Omit<IScanHistory, "_id" | "createdAt" | "userId" | "analysisId">, Document {
+  userId: mongoose.Types.ObjectId | string;
+  analysisId: mongoose.Types.ObjectId | string;
   createdAt: Date;
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -8,7 +8,7 @@ import { Shield, Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/Toast";
 
-export default function Login() {
+function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, error, clearError, user } = useAuthStore();
@@ -138,5 +138,20 @@ export default function Login() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen w-full flex items-center justify-center bg-grid-glow px-4 py-12 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full flex flex-col items-center justify-center glass-panel p-8 sm:p-10 rounded-3xl border border-border/50 shadow-2xl min-h-[400px]">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+          <p className="text-sm text-muted-foreground">Loading login form...</p>
+        </div>
+      </div>
+    }>
+      <LoginFormContent />
+    </Suspense>
   );
 }

@@ -37,7 +37,7 @@ async function verifyJwtEdge(token: string, secret: string): Promise<any | null>
       ["verify"]
     );
 
-    const isValid = await crypto.subtle.verify("HMAC", key, sigBytes, data);
+    const isValid = await crypto.subtle.verify("HMAC", key, sigBytes as any, data as any);
     if (!isValid) return null;
 
     const payloadStr = new TextDecoder().decode(base64UrlDecode(payload));

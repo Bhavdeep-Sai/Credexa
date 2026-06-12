@@ -1,7 +1,9 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 import { IAdminSettings } from "@/types";
 
-export interface IAdminSettingsDocument extends Omit<IAdminSettings, "_id">, Document {}
+export interface IAdminSettingsDocument extends Omit<IAdminSettings, "_id" | "updatedBy">, Document {
+  updatedBy: mongoose.Types.ObjectId | string;
+}
 
 const AdminSettingsSchema = new Schema<IAdminSettingsDocument>({
   maintenanceMode: {

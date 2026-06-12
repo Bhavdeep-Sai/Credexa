@@ -2,8 +2,6 @@
 
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookForm/resolvers/zod"; // Wait, did we install resolvers?
-// Oh! Let's check package.json: we didn't add @hookform/resolvers. We can use react-hook-form directly with manual verification or Zod parsing inside onSubmit, or we can use react-hook-form's native properties to avoid extra packages. Let's write standard React Hook Form validator or basic zod parsing to keep it clean and robust.
 import { z } from "zod";
 import { useToast } from "@/components/ui/Toast";
 import { Mail, Phone, MapPin, Send, Loader2 } from "lucide-react";

@@ -55,7 +55,7 @@ export default function Navbar() {
   const isLinkActive = (path: string) => pathname === path;
 
   // Render navigation links based on user status
-  const getNavLinks = () => {
+  const getNavLinks = (): { href: string; label: string; icon?: React.ReactNode }[] => {
     if (user) {
       const links = [
         { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },

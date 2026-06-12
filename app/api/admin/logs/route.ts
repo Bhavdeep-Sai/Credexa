@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
     // Retrieve logs, populate user details
     const logs = await SystemLog.find(query)
-      .populate("userId", "name email role")
+      .populate({ path: "userId", select: "name email role", model: User })
       .sort({ createdAt: -1 })
       .limit(limit);
 

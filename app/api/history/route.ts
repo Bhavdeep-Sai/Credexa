@@ -53,7 +53,7 @@ export async function GET(request: Request) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate("analysisId");
+      .populate({ path: "analysisId", model: Analysis });
 
     const total = await ScanHistory.countDocuments(query);
 

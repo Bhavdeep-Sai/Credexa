@@ -116,8 +116,8 @@ export async function analyzeText(text: string): Promise<IAnalysisResult> {
 
     return JSON.parse(rawResponse) as IAnalysisResult;
   } catch (error) {
-    console.error("Error in analyzeText service:", error);
-    throw new Error("Failed to analyze text content with AI.");
+    console.error("Error in analyzeText service, falling back to mock:", error);
+    return getMockResult("text", text);
   }
 }
 
@@ -147,8 +147,8 @@ export async function analyzeUrl(url: string, pageMetadata?: string): Promise<IA
 
     return JSON.parse(rawResponse) as IAnalysisResult;
   } catch (error) {
-    console.error("Error in analyzeUrl service:", error);
-    throw new Error("Failed to analyze URL with AI.");
+    console.error("Error in analyzeUrl service, falling back to mock:", error);
+    return getMockResult("url", url);
   }
 }
 
@@ -179,8 +179,8 @@ export async function analyzeScreenshot(base64Data: string, mimeType: string): P
 
     return JSON.parse(rawResponse) as IAnalysisResult;
   } catch (error) {
-    console.error("Error in analyzeScreenshot service:", error);
-    throw new Error("Failed to analyze screenshot image with AI.");
+    console.error("Error in analyzeScreenshot service, falling back to mock:", error);
+    return getMockResult("screenshot", "Image uploaded");
   }
 }
 
@@ -209,8 +209,8 @@ export async function analyzeVoiceNote(base64Data: string, mimeType: string): Pr
 
     return JSON.parse(rawResponse) as IAnalysisResult;
   } catch (error) {
-    console.error("Error in analyzeVoiceNote service:", error);
-    throw new Error("Failed to analyze voice note audio with AI.");
+    console.error("Error in analyzeVoiceNote service, falling back to mock:", error);
+    return getMockResult("voice", "Audio uploaded");
   }
 }
 

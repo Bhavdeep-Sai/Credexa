@@ -28,8 +28,8 @@ export async function POST(request: Request) {
 
     const { name, email, password } = parsedData.data;
 
-    // Check if user exists
-    const existingUser = await User.findOne({ email });
+    // Check if user exists (normalize email lookup)
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return NextResponse.json({ error: "Email is already registered" }, { status: 409 });
     }

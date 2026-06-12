@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
 import dns from "dns";
 
-// Configure DNS servers globally in Node.js to use Google and Cloudflare DNS
+// Configure DNS servers globally in Node.js to use Google and Cloudflare DNS in development/test
 // This resolves the querySrv ECONNREFUSED error when resolving MongoDB SRV records on some networks/ISPs.
-if (dns && typeof dns.setServers === "function") {
+if (process.env.NODE_ENV !== "production" && dns && typeof dns.setServers === "function") {
   try {
     dns.setServers(["8.8.8.8", "1.1.1.1"]);
   } catch (err) {

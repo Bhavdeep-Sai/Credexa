@@ -26,8 +26,8 @@ export async function POST(request: Request) {
 
     const { email, password } = parsedData.data;
 
-    // Check user exists
-    const user = await User.findOne({ email });
+    // Check user exists (normalize email lookup)
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }

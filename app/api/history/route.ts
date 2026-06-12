@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import ScanHistory from "@/models/ScanHistory";
+import Analysis from "@/models/Analysis"; // Explicitly register Analysis model for populate
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 

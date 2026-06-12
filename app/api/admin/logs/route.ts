@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import SystemLog from "@/models/SystemLog";
+import User from "@/models/User"; // Explicitly register User model for populate
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 

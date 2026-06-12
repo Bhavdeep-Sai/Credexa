@@ -13,7 +13,8 @@ It features a specialized accessibility layout (**Grandparent Mode**) for senior
 - **Backend Core**: Next.js 16 Proxy and Serverless API Routes (No separate backend or FastAPI).
 - **Database Layer**: MongoDB Atlas, Mongoose ODM.
 - **Security Protocols**: HTTP-only JWT cookies, bcryptjs password hashes, custom memory rate-limiting, secure headers.
-- **AI Core**: Google Gemini 1.5 Multimodal API (processing text, image Vision OCR, and speech Audio inline base64 data).
+- **AI Core**: Google Gemini 2.5 Multimodal API (processing text, image Vision OCR, and speech Audio inline base64 data).
+- **Fallback AI Core**: Groq Cloud API (Llama 3.3 for text/URL, Llama 3.2 Vision for screenshots, and Whisper Large v3 for audio transcription).
 
 ---
 
@@ -103,6 +104,9 @@ JWT_SECRET=super_secret_session_token_key_change_in_production
 
 # Google Gemini API key
 GEMINI_API_KEY=AIzaSyD_your_valid_gemini_api_key_here
+
+# Groq Cloud API key
+GROQ_API_KEY=gsk_your_valid_groq_api_key_here
 ```
 
 ### 3. Installation
@@ -223,6 +227,30 @@ Updates base Safety prompts, maximum upload sizes, and maintenance mode status.
 
 ---
 
+## 🧠 Robust Multi-Layered AI Fallback System
+
+To ensure 100% uptime and resilience against API rate-limits, pricing constraints, or quota exhaustion, Credexa features a smart fallback system:
+
+1. **Primary Layer (Google Gemini)**: Multimodal scan execution utilizing `gemini-2.5-flash`.
+2. **Secondary Layer (Groq API)**: If Gemini returns a quota exceeded (429) or connection error, the app fails over to Groq:
+   * **Text/URLs**: Analyzed using `llama-3.3-70b-versatile` with JSON schema enforcement.
+   * **Screenshots**: OCR/threat detection using the vision model `llama-3.2-11b-vision-preview`.
+   * **Voice Notes**: Transcribed using Groq Whisper `whisper-large-v3` and then analyzed.
+3. **Tertiary Layer (Smart Mocks)**: If both Google AI and Groq are unavailable, the system safely falls back to a smart, deterministic regex-based scanner to prevent user-facing errors.
+
+---
+
+## 🔧 Production Audit & Troubleshooting Solutions
+
+During audit and deployment optimizations, several fixes were integrated to bridge the gap between development and production environments:
+
+- **Mongoose Tree-Shaking Fixes**: Pass models explicitly to populate queries (e.g. `.populate({ path: "analysisId", model: Analysis })`) to prevent bundlers from stripping imports during Next.js serverless builds, resolving production `MissingSchemaError`s.
+- **VPC DNS Server Isolation**: Restrict custom DNS `dns.setServers` parameters to non-production environments to avoid network blocks on serverless platforms like Vercel.
+- **Cold-Start Connections**: Guaranteed that all routes (such as `/api/auth/logout`) explicitly invoke `dbConnect()` before writing logs, preventing database timeouts on cold starts.
+- **Email Lowercase Normalization**: Standardized login and registration to lowercase input emails to avoid lookup mismatches and duplicate account creation.
+
+---
+
 ## 🚀 Deployment Guide
 
 ### Deploying on Vercel
@@ -235,6 +263,7 @@ Credexa is configured to run out-of-the-box on Vercel:
    - `MONGODB_URI`
    - `JWT_SECRET`
    - `GEMINI_API_KEY`
+   - `GROQ_API_KEY`
 4. Click **Deploy**. Vercel will build the Next.js frontend pages and mount all API paths to serverless cloud functions automatically.
 
 ### Running Tests

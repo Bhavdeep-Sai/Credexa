@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, Schema } from "@google/generative-ai";
 import { IAnalysisResult } from "@/types";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 // Initialize Google Gemini SDK
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || "dummy_key_for_build");
@@ -91,127 +92,303 @@ async function runWithRetry(fn: () => Promise<string>, retries = 3, delay = 1000
 }
 
 /**
+ * Transcribe base64 audio using Groq's Whisper API
+ */
+async function transcribeAudioWithGroq(base64Data: string, mimeType: string): Promise<string> {
+  if (!GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY is not configured.");
+  }
+
+  const base64Clean = base64Data.includes(",") ? base64Data.split(",")[1] : base64Data;
+  const buffer = Buffer.from(base64Clean, "base64");
+  
+  let ext = "mp3";
+  if (mimeType.includes("wav")) ext = "wav";
+  else if (mimeType.includes("m4a")) ext = "m4a";
+  else if (mimeType.includes("webm")) ext = "webm";
+
+  const file = new File([buffer], `audio.${ext}`, { type: mimeType });
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("model", "whisper-large-v3");
+
+  const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${GROQ_API_KEY}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Groq Transcription failed: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  return data.text;
+}
+
+/**
+ * Call Groq's OpenAI-compatible completions API
+ */
+async function callGroqAPI(messages: any[], model: string): Promise<string> {
+  if (!GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY is not configured.");
+  }
+
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Groq API returned ${response.status}: ${errorText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+/**
+ * Perform Threat analysis using Groq models as a fallback
+ */
+async function analyzeWithGroq(type: string, content: string, fileType?: string): Promise<IAnalysisResult> {
+  const schemaInstruction = `
+    You must return a JSON object containing the threat analysis. The JSON must match this TypeScript interface:
+    interface IAnalysisResult {
+      riskLevel: "Safe" | "Suspicious" | "Dangerous";
+      confidence: number;
+      category: string;
+      redFlags: string[];
+      explanation: string;
+      recommendations: string[];
+      safeReply: string;
+    }
+  `;
+
+  let messages: any[] = [];
+  let modelName = "llama-3.3-70b-versatile";
+
+  if (type === "text") {
+    messages = [
+      {
+        role: "system",
+        content: `You are a scam and phishing intelligence agent. Analyze text messages for potential fraud. ${schemaInstruction}`,
+      },
+      {
+        role: "user",
+        content: `Analyze the following text: "${content}"`,
+      },
+    ];
+  } else if (type === "url") {
+    messages = [
+      {
+        role: "system",
+        content: `You are a scam and phishing intelligence agent. Analyze URLs for potential phishing or fraud. ${schemaInstruction}`,
+      },
+      {
+        role: "user",
+        content: `Analyze the following URL: "${content}"`,
+      },
+    ];
+  } else if (type === "screenshot") {
+    modelName = "llama-3.2-11b-vision-preview";
+    const mime = fileType || "image/png";
+    const base64Clean = content.includes(",") ? content.split(",")[1] : content;
+    const dataUrl = `data:${mime};base64,${base64Clean}`;
+
+    messages = [
+      {
+        role: "system",
+        content: `You are a scam and phishing intelligence agent. Analyze screenshots for potential fraud. ${schemaInstruction}`,
+      },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Analyze the text and visual elements of this screenshot for potential scams or security risks." },
+          { type: "image_url", image_url: { url: dataUrl } }
+        ]
+      }
+    ];
+  } else if (type === "voice") {
+    const transcript = await transcribeAudioWithGroq(content, fileType || "audio/mp3");
+    messages = [
+      {
+        role: "system",
+        content: `You are a scam and phishing intelligence agent. Analyze audio transcripts for potential scams or fraud. ${schemaInstruction}`,
+      },
+      {
+        role: "user",
+        content: `Analyze this transcribed speech transcript: "${transcript}"`,
+      },
+    ];
+  }
+
+  const responseText = await callGroqAPI(messages, modelName);
+  return JSON.parse(responseText) as IAnalysisResult;
+}
+
+/**
  * Analyze text content for scams
  */
 export async function analyzeText(text: string): Promise<IAnalysisResult> {
-  if (!GEMINI_API_KEY) {
-    return getMockResult("text", text);
+  if (GEMINI_API_KEY) {
+    const prompt = `
+      Analyze the following text message, WhatsApp, email, or communication for safety, potential scams, phishing attempts, threat language, fake offers, OTP requests, bank fraud, job scams, lottery scams, or cryptocurrency fraud.
+      
+      Content to analyze:
+      """
+      ${text}
+      """
+    `;
+
+    try {
+      const rawResponse = await runWithRetry(async () => {
+        const model = getModel();
+        const response = await model.generateContent(prompt);
+        return response.response.text();
+      });
+
+      return JSON.parse(rawResponse) as IAnalysisResult;
+    } catch (error) {
+      console.error("Error in Gemini analyzeText service, trying Groq fallback:", error);
+    }
   }
 
-  const prompt = `
-    Analyze the following text message, WhatsApp, email, or communication for safety, potential scams, phishing attempts, threat language, fake offers, OTP requests, bank fraud, job scams, lottery scams, or cryptocurrency fraud.
-    
-    Content to analyze:
-    """
-    ${text}
-    """
-  `;
-
-  try {
-    const rawResponse = await runWithRetry(async () => {
-      const model = getModel();
-      const response = await model.generateContent(prompt);
-      return response.response.text();
-    });
-
-    return JSON.parse(rawResponse) as IAnalysisResult;
-  } catch (error) {
-    console.error("Error in analyzeText service, falling back to mock:", error);
-    return getMockResult("text", text);
+  if (GROQ_API_KEY) {
+    try {
+      return await analyzeWithGroq("text", text);
+    } catch (error) {
+      console.error("Error in Groq fallback for analyzeText, falling back to mock:", error);
+    }
   }
+
+  return getMockResult("text", text);
 }
 
 /**
  * Analyze URL for phishing
  */
 export async function analyzeUrl(url: string, pageMetadata?: string): Promise<IAnalysisResult> {
-  if (!GEMINI_API_KEY) {
-    return getMockResult("url", url);
+  if (GEMINI_API_KEY) {
+    const prompt = `
+      Analyze the following URL link for phishing indicators, fake domain structures, lookalike domains (typosquatting), URL shortening service redirects, suspicious keywords, and scam patterns.
+      
+      URL: ${url}
+      ${pageMetadata ? `Fetched page context metadata: ${pageMetadata}` : ""}
+      
+      Evaluate the risk level and detail any red flags found.
+    `;
+
+    try {
+      const rawResponse = await runWithRetry(async () => {
+        const model = getModel();
+        const response = await model.generateContent(prompt);
+        return response.response.text();
+      });
+
+      return JSON.parse(rawResponse) as IAnalysisResult;
+    } catch (error) {
+      console.error("Error in Gemini analyzeUrl service, trying Groq fallback:", error);
+    }
   }
 
-  const prompt = `
-    Analyze the following URL link for phishing indicators, fake domain structures, lookalike domains (typosquatting), URL shortening service redirects, suspicious keywords, and scam patterns.
-    
-    URL: ${url}
-    ${pageMetadata ? `Fetched page context metadata: ${pageMetadata}` : ""}
-    
-    Evaluate the risk level and detail any red flags found.
-  `;
-
-  try {
-    const rawResponse = await runWithRetry(async () => {
-      const model = getModel();
-      const response = await model.generateContent(prompt);
-      return response.response.text();
-    });
-
-    return JSON.parse(rawResponse) as IAnalysisResult;
-  } catch (error) {
-    console.error("Error in analyzeUrl service, falling back to mock:", error);
-    return getMockResult("url", url);
+  if (GROQ_API_KEY) {
+    try {
+      return await analyzeWithGroq("url", url);
+    } catch (error) {
+      console.error("Error in Groq fallback for analyzeUrl, falling back to mock:", error);
+    }
   }
+
+  return getMockResult("url", url);
 }
 
 /**
  * Analyze a screenshot image (multimodal OCR + scam detection)
  */
 export async function analyzeScreenshot(base64Data: string, mimeType: string): Promise<IAnalysisResult> {
-  if (!GEMINI_API_KEY) {
-    return getMockResult("screenshot", "Image uploaded");
+  if (GEMINI_API_KEY) {
+    const imagePart = fileToGenerativePart(base64Data, mimeType);
+    const prompt = `
+      Analyze the attached screenshot. 
+      1. Extract all text, numbers, links, and details shown in the image (simulate OCR).
+      2. Inspect visual cues, layouts, and logos if any.
+      3. Determine if the message or interface shown is a scam, phishing notification, fraud alert, imposter account, or secure interface.
+      
+      Return a full threat report in JSON.
+    `;
+
+    try {
+      const rawResponse = await runWithRetry(async () => {
+        const model = getModel();
+        const response = await model.generateContent([prompt, imagePart]);
+        return response.response.text();
+      });
+
+      return JSON.parse(rawResponse) as IAnalysisResult;
+    } catch (error) {
+      console.error("Error in Gemini analyzeScreenshot service, trying Groq fallback:", error);
+    }
   }
 
-  const imagePart = fileToGenerativePart(base64Data, mimeType);
-  const prompt = `
-    Analyze the attached screenshot. 
-    1. Extract all text, numbers, links, and details shown in the image (simulate OCR).
-    2. Inspect visual cues, layouts, and logos if any.
-    3. Determine if the message or interface shown is a scam, phishing notification, fraud alert, imposter account, or secure interface.
-    
-    Return a full threat report in JSON.
-  `;
-
-  try {
-    const rawResponse = await runWithRetry(async () => {
-      const model = getModel();
-      const response = await model.generateContent([prompt, imagePart]);
-      return response.response.text();
-    });
-
-    return JSON.parse(rawResponse) as IAnalysisResult;
-  } catch (error) {
-    console.error("Error in analyzeScreenshot service, falling back to mock:", error);
-    return getMockResult("screenshot", "Image uploaded");
+  if (GROQ_API_KEY) {
+    try {
+      return await analyzeWithGroq("screenshot", base64Data, mimeType);
+    } catch (error) {
+      console.error("Error in Groq fallback for analyzeScreenshot, falling back to mock:", error);
+    }
   }
+
+  return getMockResult("screenshot", "Image uploaded");
 }
 
 /**
  * Analyze an audio recording / voice note (multimodal Speech-to-Text + scam detection)
  */
 export async function analyzeVoiceNote(base64Data: string, mimeType: string): Promise<IAnalysisResult> {
-  if (!GEMINI_API_KEY) {
-    return getMockResult("voice", "Audio uploaded");
+  if (GEMINI_API_KEY) {
+    const audioPart = fileToGenerativePart(base64Data, mimeType);
+    const prompt = `
+      Analyze the attached voice note audio.
+      1. Transcribe the speech to text.
+      2. Analyze the transcript for scam patterns, threat language, extortion, bank impersonation, urgency hooks, fake government official demands, or emergency family member scams (imposter scams).
+      3. Return the full threat report in JSON.
+    `;
+
+    try {
+      const rawResponse = await runWithRetry(async () => {
+        const model = getModel();
+        const response = await model.generateContent([prompt, audioPart]);
+        return response.response.text();
+      });
+
+      return JSON.parse(rawResponse) as IAnalysisResult;
+    } catch (error) {
+      console.error("Error in Gemini analyzeVoiceNote service, trying Groq fallback:", error);
+    }
   }
 
-  const audioPart = fileToGenerativePart(base64Data, mimeType);
-  const prompt = `
-    Analyze the attached voice note audio.
-    1. Transcribe the speech to text.
-    2. Analyze the transcript for scam patterns, threat language, extortion, bank impersonation, urgency hooks, fake government official demands, or emergency family member scams (imposter scams).
-    3. Return the full threat report in JSON.
-  `;
-
-  try {
-    const rawResponse = await runWithRetry(async () => {
-      const model = getModel();
-      const response = await model.generateContent([prompt, audioPart]);
-      return response.response.text();
-    });
-
-    return JSON.parse(rawResponse) as IAnalysisResult;
-  } catch (error) {
-    console.error("Error in analyzeVoiceNote service, falling back to mock:", error);
-    return getMockResult("voice", "Audio uploaded");
+  if (GROQ_API_KEY) {
+    try {
+      return await analyzeWithGroq("voice", base64Data, mimeType);
+    } catch (error) {
+      console.error("Error in Groq fallback for analyzeVoiceNote, falling back to mock:", error);
+    }
   }
+
+  return getMockResult("voice", "Audio uploaded");
 }
 
 /**
